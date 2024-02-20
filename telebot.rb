@@ -62,7 +62,7 @@ Telegram::Bot::Client.run(token) do |bot|
       store.transaction do
         store["prompt"] << message.text
       end
-      bot.api.send_message(chat_id: message.chat.id, text: "stored new prompt, use /prompts to list all all prompts")
+      bot.api.send_message(chat_id: message.chat.id, text: "stored new prompt, use /prompts to list all prompts")
     end
 
     if message.photo
