@@ -3,52 +3,88 @@ require 'telegram/bot'
 require "openai"
 require "down"
 require "base64"
+require 'yaml/store'
 
 token = ENV["TELEGRAM_TOKEN"]
 openai_token = ENV["OPENAI_TOKEN"]
+default_prompt = ENV["DEFAULT_PROMPT"]
+admin_id = ENV["ADMIN_ID"]
 
 openai_client = OpenAI::Client.new(access_token: openai_token)
+
+store = YAML::Store.new "prompt.store"
+
+store.transaction do
+  if store["prompt"].nil?
+    store["prompt"] = [default_prompt]
+  end
+end
 
 Telegram::Bot::Client.run(token) do |bot|
 
   bot.listen do |message|
-  
+
     case message.text
-    when '/start'
-      bot.api.send_message(chat_id: message.chat.id, text: "Hello, #{message.from.first_name}")
-    when '/stop'
-      bot.api.send_message(chat_id: message.chat.id, text: "Bye, #{message.from.first_name}")
-    when '/chat'
-      
-      response = openai_client.chat(
-        parameters: {
-            model: "gpt-3.5-turbo", # Required.
-            messages: [{ role: "user", content: "Hello!"}], # Required.
-            temperature: 0.7,
-        })
-      puts response.dig("choices", 0, "message", "content")
-      chatmsg = response.dig("choices", 0, "message", "content")
+      when '/start'
+        bot.api.send_message(chat_id: message.chat.id, text: "Hello, #{message.from.first_name}")
+      when '/stop'
+        bot.api.send_message(chat_id: message.chat.id, text: "Bye, #{message.from.first_name}")
+      when '/help'
+        bot.api.send_message(chat_id: message.chat.id, text: "Help text here")
+      when '/chat'
+        response = openai_client.chat(
+          parameters: {
+              model: "gpt-3.5-turbo", # Required.
+              messages: [{ role: "user", content: "Hello!"}], # Required.
+              temperature: 0.7,
+          })
+        chatmsg = response.dig("choices", 0, "message", "content")
+        bot.api.send_message(chat_id: message.chat.id, text: chatmsg)
+      when '/prompts'
+        if message.from.id == admin_id.to_i
+          store.transaction(true) do
+            prompts = store["prompt"]
+            allprompts = prompts.join("\n\n")
+            if allprompts.length > 4000
+              (0...allprompts.length).step(4000) do | n |
+                bot.api.send_message(chat_id: message.chat.id, text: allprompts[n..n+4000])
+              end
+            else
+              bot.api.send_message(chat_id: message.chat.id, text: allprompts)
+            end
+          end
+        end
 
-      bot.api.send_message(chat_id: message.chat.id, text: chatmsg)
+    end #case
 
+    if message.from.id == admin_id.to_i && message.text && message.text.start_with?("/setprompt")
+      message.text.slice!("/setprompt ")
+      store.transaction do
+        store["prompt"] << message.text
+      end
+      bot.api.send_message(chat_id: message.chat.id, text: "stored new prompt, use /prompts to list all all prompts")
     end
 
     if message.photo
-
+      prompt = default_prompt
+      store.transaction(true) do
+        prompt = store["prompt"][-1] 
+      end
       file = bot.api.get_file(file_id: message.photo[-1].file_id)
       file_path = file.file_path
       url = "https://api.telegram.org/file/bot#{ENV['TELEGRAM_TOKEN']}/#{file_path}"
       tempfile = Down.download(url)
 
+      bot.api.send_message(chat_id: message.chat.id, text: "I've recieved the image, sending it to the AI now, please wait...")
+
       base64_image = Base64.strict_encode64(tempfile.read)
 
-      bot.api.send_message(chat_id: message.chat.id, text: "Got image, sending it to the AI now...")
-
       oa_messages = [
-        { "type": "text", "text": "What's in this image?"},
+        { "type": "text", "text": prompt},
         { "type": "image_url",
           "image_url": {
-            "url":  "data:image/jpeg;base64,#{base64_image}"
+            "url":  "data:image/jpeg;base64,#{base64_image}",
+            "quality": "high"
           },
         }
       ]
@@ -56,16 +92,15 @@ Telegram::Bot::Client.run(token) do |bot|
           parameters: {
               model: "gpt-4-vision-preview", # Required.
               messages: [{ role: "user", content: oa_messages}], # Required.
-              max_tokens: 300,
+              max_tokens: 2000,
           })
       puts response.inspect
       chatmsg = response.dig("choices", 0, "message", "content")
 
-      
       bot.api.send_message(chat_id: message.chat.id, text: chatmsg)
 
       tempfile.unlink  #delete temp file
-      encoded = nil
+      encoded = nil  #just in case!
       
     end
   end
