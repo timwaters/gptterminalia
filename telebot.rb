@@ -9,6 +9,7 @@ token = ENV["TELEGRAM_TOKEN"]
 openai_token = ENV["OPENAI_TOKEN"]
 default_prompt = ENV["DEFAULT_PROMPT"]
 admin_id = ENV["ADMIN_ID"]
+help_user = ENV["HELP_USER"]
 
 openai_client = OpenAI::Client.new(access_token: openai_token)
 
@@ -26,11 +27,12 @@ Telegram::Bot::Client.run(token) do |bot|
     if message.text
       case message.text
         when '/start'
-          bot.api.send_message(chat_id: message.chat.id, text: "Hello, #{message.from.first_name}")
+          bot.api.send_message(chat_id: message.chat.id, text: "Hello, #{message.from.first_name} this is the terminalia bot. Type /help for help getting started.")
         when '/stop'
           bot.api.send_message(chat_id: message.chat.id, text: "Bye, #{message.from.first_name}")
         when '/help'
-          bot.api.send_message(chat_id: message.chat.id, text: "Help text here")
+          bot.api.send_message(chat_id: message.chat.id, 
+            text:  "This bot responds to /start /stop /help \n\n It is for the AI Adventure in Leeds event for Terminalia 2024 \n\n If you upload an image it will sent to OpenAI Vision API. No photos are saved by the bot but may be used by OpenAI. Do not upload personal information or sensitive images! \n The AI will look at the image and suggest things to do in a walking artist or psychogeographical way! \n\n If you have any problems please message @#{help_user}")
         when '/chat'
           response = openai_client.chat(
             parameters: {
