@@ -79,7 +79,9 @@ Telegram::Bot::Client.run(token) do |bot|
         url = "https://api.telegram.org/file/bot#{ENV['TELEGRAM_TOKEN']}/#{file_path}"
         tempfile = Down.download(url)
 
-        bot.api.send_message(chat_id: message.chat.id, text: "Sending image to the AI now, this might take a minute...")
+        msg = bot.api.send_message(chat_id: message.chat.id, text: "Sending image to the AI now, this might take a minute...")
+        
+        bot.api.send_chat_action(chat_id: message.chat.id, action: "upload_photo")
 
         base64_image = Base64.strict_encode64(tempfile.read)
 
@@ -101,7 +103,8 @@ Telegram::Bot::Client.run(token) do |bot|
         puts response.inspect
         chatmsg = response.dig("choices", 0, "message", "content")
 
-        bot.api.send_message(chat_id: message.chat.id, text: chatmsg)
+        bot.api.edit_message_text(chat_id: message.chat.id, message_id: msg.message_id, text: chatmsg)
+       # bot.api.send_message(chat_id: message.chat.id, text: chatmsg)
 
         tempfile.unlink  #delete temp file
         encoded = nil  #just in case!
