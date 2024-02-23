@@ -24,6 +24,8 @@ end
 Telegram::Bot::Client.run(token) do |bot|
 
   bot.listen do |message|
+    puts message.inspect
+    
     if message.text
       case message.text
         when '/start'
